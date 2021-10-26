@@ -279,7 +279,10 @@ class Connection:
             except FileNotFoundError:
                 pass
 
-        raise FileNotFoundError(f"No '.raspinel.yml' found in : {paths}")
+        msg = "No environment variables set and no config file found at :"
+        msg += "".join("\n - " + p for p in paths)
+        msg += "\nSee README.md for more explanation."
+        raise FileNotFoundError(msg)
 
     @staticmethod
     def resolve() -> 'Connection':

@@ -39,7 +39,11 @@ def main() -> int:
         app = App()
         app.mainloop()
     else:
-        conn = Client.resolve()
+        try:
+            conn = Client.resolve()
+        except FileNotFoundError as e:
+            print(e, file=sys.stderr, end="")
+            return -1
         try:
             if args.info:
                 print(conn.info)

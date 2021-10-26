@@ -20,7 +20,7 @@ from raspinel.util import temp_file, rel_path
 
 
 CMD_CREATE_SCREEN = "python3 -c '__import__(\"time\").sleep({})'"
-ASYNC_LOOP = 1
+ASYNC_LOOP = 30
 ALPHABET = digits + ascii_letters
 INVALID_URL = "invalid-" + "".join(random.choice(ALPHABET) for i in range(55))
 

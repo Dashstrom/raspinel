@@ -23,24 +23,6 @@ from .util import rel_path
 ICON_PATH = rel_path("assets/raspinel.ico")
 R = TypeVar("R")
 
-
-# FIXME : ParamSpec not supported by mypy
-# see https://github.com/python/mypy/issues/8645
-def show_error(func: Callable[..., R]) -> Callable[..., R | None]:
-    """Show error messagebox if an error is raised."""
-    @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> R | None:
-        try:
-            result = func(*args, **kwargs)
-            return result
-        except Exception as e:
-            print_exc()
-            name = e.__class__.__qualname__
-            messagebox.showerror(f"{name} occurred", repr(e))
-            return None
-    return wrapper
-
-
 loaded: dict[str, tk.PhotoImage] = {}
 
 
@@ -49,6 +31,26 @@ def img(name: str) -> tk.PhotoImage:
     if name not in loaded:
         loaded[name] = tk.PhotoImage(file=rel_path("assets/" + name))
     return loaded[name]
+
+
+# FIXME : ParamSpec not supported by mypy
+# see https://github.com/python/mypy/issues/8645
+def show_errors_raised(func: Callable[..., R]) -> Callable[..., R | None]:
+    """Show error messagebox if an error is raised."""
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> R | None:
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            return show_error(e)
+    return wrapper
+
+
+def show_error(error: Exception) -> None:
+    """Show an error in a popup."""
+    print_exc()
+    name = error.__class__.__qualname__
+    messagebox.showerror(f"{name} occurred", str(error))
 
 
 class SquareButton(tk.Button):
@@ -232,24 +234,24 @@ class Interaction(tk.LabelFrame):
             button.pack(side=LEFT, pady=5, padx=5)
             self.buttons[text] = button
 
-    @show_error
+    @show_errors_raised
     def pressed_manager(self) -> None:
         """Open ScreenManager."""
         self._manager = ScreenManager(self, self.client)
 
-    @show_error
+    @show_errors_raised
     def pressed_putty(self) -> None:
         """Open Putty window."""
         self.client.putty()
 
-    @show_error
+    @show_errors_raised
     def pressed_winscp(self) -> None:
         """Open winscp window."""
         self.client.winscp()
 
     def pressed_reboot(self) -> None:
         """Reboot remote in other thread."""
-        thread = Thread(target=show_error(self.client.reboot))
+        thread = Thread(target=show_errors_raised(self.client.reboot))
         thread.start()
         self.after(2000, thread.join)
 
@@ -277,7 +279,8 @@ class App(tk.Tk):
         self.closed = True
         self.raspberry.close()
         self.__th.join()
-        self.destroy()
+        # run action from the main thread
+        self.after(0, self.destroy)
 
     def handle_starting(self) -> None:
         """Called when the app is starting."""
@@ -290,6 +293,11 @@ class App(tk.Tk):
                     config = self.raspberry.default_config()
                     self.raspberry.connect(**config)
                     logging.info("Try reconnect")
+                except FileNotFoundError as e:
+                    self.withdraw()
+                    show_error(e)
+                    self.after(0, self.destroy)
+                    return
                 except TimeoutError:
                     logging.error("Timeout")
                 except AuthenticationException:
@@ -370,7 +378,7 @@ class ScreenManager(tk.Toplevel):
         thread.start()
         # self.__update_th = th
 
-    @show_error
+    @show_errors_raised
     def handle_double_left_click(self, event: Any) -> None:
         """Triggered by double click for attach screen."""
         screen = self.focus_at(event.y)
@@ -409,7 +417,7 @@ class ScreenManager(tk.Toplevel):
             screens.append(screen)
         return screens
 
-    @show_error
+    @show_errors_raised
     def pressed_kill_screen(self) -> None:
         """Kill the selected screens."""
         for screen in self.selection:
@@ -419,13 +427,13 @@ class ScreenManager(tk.Toplevel):
                 # Screen already dead
                 pass
 
-    @show_error
+    @show_errors_raised
     def pressed_attach_screen(self) -> None:
         """Open putty session with connecting to the selected screens."""
         for screen in self.selection:
             self.raspberry.putty(screen=screen)
 
-    @show_error
+    @show_errors_raised
     def pressed_create_screen(self) -> None:
         """Create screen."""
         cmd = self.cmd.get()
