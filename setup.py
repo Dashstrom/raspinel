@@ -1,6 +1,5 @@
 from sys import stderr
 from setuptools import setup, find_packages
-from raspinel import __version__, __author__
 
 
 def read(path: str) -> str:
@@ -14,12 +13,13 @@ def read(path: str) -> str:
 
 setup(
     name='raspinel',
-    version=__version__,
-    description='Easy-to-use raspberry pi manager',
-    long_description=read("README.md"),
-    author=__author__,
+    version="1.0.0",
+    author="Dashstrom",
     author_email='***REMOVED***',
-    url='https://github.com/Dashstrom',
+    url='https://github.com/Dashstrom/raspinel',
     license=read("LICENSE"),
-    packages=find_packages(exclude=('tests', 'docs'))
+    packages=find_packages(exclude=('tests', 'docs')),
+    long_description=read("README.md"),
+    description=('Connection package to a raspberry '
+                 'or any other machine using ssh.')
 )
