@@ -5,7 +5,7 @@ it simplifies the deployment scripts and monitoring.
 
 ⚠️ Warning : no security guarantee, please do not use this package for access to sensitive data.
 
-⚠️ Developed only for window at the moment
+⚠️ Developed only for window client to linux remote at the moment
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
