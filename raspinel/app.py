@@ -24,7 +24,8 @@ ICON_PATH = rel_path("assets/raspinel.ico")
 R = TypeVar("R")
 
 
-# FIXME : see https://github.com/python/mypy/issues/8645
+# FIXME : ParamSpec not supported by mypy
+# see https://github.com/python/mypy/issues/8645
 def show_error(func: Callable[..., R]) -> Callable[..., R | None]:
     """Show error messagebox if an error is raised."""
     @wraps(func)

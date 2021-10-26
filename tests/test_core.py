@@ -63,7 +63,7 @@ class TestConnection(TestCase):
     def test_connect_wrong_hostname(self) -> None:
         conn = Connection.resolve()
         self.assertTrue(conn.connected(), "Login with valid hostname")
-        # FIXME : raise ResourceWarning but can't do nothing
+        # FIXME : raise ResourceWarning at closing if the host is unresolvable
         # see: https://github.com/paramiko/paramiko/issues/1126
         with self.assertRaises(TimeoutError):
             config = conn.default_config()
