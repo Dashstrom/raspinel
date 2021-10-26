@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+
+raspinel/tmp/
+.raspinel.yml
+test_raspinel.bin
+
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# vscode
+.vscode/
+*.code-workspace
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+mypy.ini
