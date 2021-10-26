@@ -96,6 +96,10 @@ To launch the application, nothing could be simpler :
 py -m raspinel
 ```
 
+![Image of Raspinel - Main Window]()
+
+![Image of Raspinel - Manager]()
+
 
 
 ## Usage as module
