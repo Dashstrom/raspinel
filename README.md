@@ -36,12 +36,10 @@ pip install .
 ```
 
 ## Configuration
-After downloading it you need to create a configuration file named `.raspinel.yml` in one of the following places
-```sh
-$HOME\.raspinel.yml
-$MODULE_PATH\.raspinel.yml
-$PWD\.raspinel.yml
-```
+After downloading it you need to create a configuration file named `.raspinel.yml` in one of the following places :
+- `$HOME\.raspinel.yml`
+- `$MODULE_PATH\.raspinel.yml`
+- `$PWD\.raspinel.yml`
 
 It must contain the following structure where only the host is mandatory.
 ```yml
@@ -63,7 +61,7 @@ export RASPINEL_TIMEOUT=${CONNECTION_TIMEOUT_MS}
 
 You must of course replace the values given in the example by your own identifiers.
 
-if all is well configure the following command should reply you `hello world`.
+If all is well configure the following command should reply you `hello world`.
 ```
 py -m raspinel "echo 'hello world'"
 ```
@@ -82,9 +80,9 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -i, --info            show some information about remote using sftp
+  -i, --info            show some information about remote
   -d src dest, --download src dest
-                        download file from remote
+                        download file from remote using sftp
   -u src dest, --upload src dest
                         upload file to remote using sftp
 ```
@@ -109,7 +107,7 @@ py -m raspinel
 
 ## Usage as module
 
-Here is a simple code that displays a hello world
+Here is a simple code that displays a hello world.
 ```python
 import sys
 from raspinel import Client
@@ -125,7 +123,7 @@ if __name__ == "__main__":
     print(resp.out)
     print(resp.err)
     
-    # get command exit
+    # exit with the same exit code that command
     sys.exit(resp.exit)
 ```
 

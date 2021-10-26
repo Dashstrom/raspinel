@@ -22,10 +22,10 @@ def main() -> int:
                     "upload or download files or run commands.\n"
                     "Run without argument start program in GUI mode.")
     parser.add_argument("-i", "--info", action="store_true",
-                        help="show some information about remote using sftp")
+                        help="show some information about remote")
     parser.add_argument("-d", "--download", type=str, nargs=2,
                         metavar=("src", "dest"),
-                        help="download file from remote")
+                        help="download file from remote using sftp")
     parser.add_argument("-u", "--upload", type=str, nargs=2,
                         metavar=("src", "dest"),
                         help="upload file to remote using sftp")
