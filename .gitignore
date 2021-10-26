@@ -1,15 +1,18 @@
+# cached files
 __pycache__/
 *.py[cod]
 
+# project hidden
 raspinel/tmp/
 .raspinel.yml
 test_raspinel.bin
 
+# installation package
 *.egg-info/
 dist/
 build/
 
-# Environments
+# environments
 .env
 .venv
 env/
