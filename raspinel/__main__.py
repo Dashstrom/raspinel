@@ -10,7 +10,6 @@ from .exception import ExitCodeError
 from .core import Client
 
 FORMAT = "[%(levelname)s][%(filename)s:%(funcName)s] %(message)s"
-logging.basicConfig(level=logging.INFO, format=FORMAT)
 
 
 def main() -> int:
@@ -36,6 +35,7 @@ def main() -> int:
     is_default = (None, [], False).__contains__
     run_as_app = all(map(is_default, vars(args).values()))
     if run_as_app:
+        logging.basicConfig(level=logging.INFO, format=FORMAT)
         app = App()
         app.mainloop()
     else:
@@ -50,8 +50,8 @@ def main() -> int:
             if args.commands:
                 raw_cmd = " ".join(args.commands)
                 resp = conn.cmd(raw_cmd)
-                print(resp.out)
-                print(resp.err, file=sys.stderr)
+                print(resp.out, end="")
+                print(resp.err, file=sys.stderr, end="")
                 return resp.exit
         except ExitCodeError as err:
             return err.code
