@@ -14,7 +14,7 @@ def read(path: str) -> str:
 setup(
     name='raspinel',
     version="1.0.0",
-    author="Dashstrom",
+    author="***REMOVED*** ***REMOVED***",
     author_email='***REMOVED***',
     url='https://github.com/Dashstrom/raspinel',
     license=read("LICENSE"),
