@@ -19,7 +19,7 @@ def main() -> int:
     """
     parser = argparse.ArgumentParser(
         description="Allows communication using ssh to get information, "
-                    "upload or download files or run commands. "
+                    "upload or download files or run commands.\n"
                     "Run without argument start program in GUI mode.")
     parser.add_argument("-i", "--info", action="store_true",
                         help="show some information about remote using sftp")
