@@ -1,7 +1,7 @@
 # Raspinel
 
 Connection package to a raspberry or any other machine using ssh,
-it allows communication to simplify the deployment scripts and monitoring.
+it simplifies the deployment scripts and monitoring.
 
 ⚠️ Warning : no security guarantee, please do not use this package for access to sensitive data.
 
