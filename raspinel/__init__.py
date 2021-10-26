@@ -13,10 +13,13 @@ __all__ = [
     'SSHError',
     'NoConnectionError',
     'rel_path',
-    'temp_file'
+    'temp_file',
+    '__version__',
+    '__author__'
 ]
+
 __version__ = "1.0.0"
-__author__ = "Dashstrom"
+__author__ = "***REMOVED*** ***REMOVED*** <***REMOVED***>"
 
 from .core import (
     DetachedProcess,
