@@ -5,6 +5,8 @@ it simplifies the deployment scripts and monitoring.
 
 ⚠️ Warning : no security guarantee, please do not use this package for access to sensitive data.
 
+⚠️ Developed only for window at the moment
+
 ## Prerequisites
 
 To use this program you need python 3.10, no support will be provided for previous versions.
