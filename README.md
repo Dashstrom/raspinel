@@ -96,7 +96,12 @@ To launch the application, nothing could be simpler :
 py -m raspinel
 ```
 
+### The main window
+
 ![Image of Raspinel - Main Window](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/capture.png)
+
+
+### The Manager
 
 ![Image of Raspinel - Manager](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/manager.png)
 
