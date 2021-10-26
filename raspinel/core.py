@@ -479,10 +479,7 @@ class Client(Connection):
 
     @property
     def cpu(self) -> list[float]:
-        """
-        Get all CPU's usage between 0 and 1,
-        if no cpu detected return empty list
-        """
+        """ Get CPU's usage between 0 and 1, if no cpu return empty list."""
         resp = self.cmd("mpstat -P ALL 1 1")
         resp.check(0)
         lines = COLOR_RE.sub("", resp.out).split("\n")[11:]
