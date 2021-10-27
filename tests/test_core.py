@@ -91,7 +91,6 @@ class TestConnection(TestCase):
 
     def test_async_reconnect(self) -> None:
         for i in range(ASYNC_LOOP):
-            print(f"Starting tests {i} ...")
             errors_collector = []
             testing = True
             conn = Connection.resolve()
