@@ -5,9 +5,10 @@ it simplifies the deployment scripts and monitoring.
 
 ⚠️ Warning : no security guarantee, please do not use this package for access to sensitive data.
 
-⚠️ Developed only for window client to linux remote at the moment
+⚠️ Developed only for window client to linux remote at the moment.
 
 ## Table of Contents
+
 1. [Prerequisites](#prerequisites)
 2. [Install](#install)
 3. [Usage in command line](#usage-in-command-line)
@@ -36,6 +37,7 @@ pip install .
 ```
 
 ## Configuration
+
 After downloading it you need to create a configuration file named `.raspinel.yml` in one of the following places :
 - `$HOME\.raspinel.yml`
 - `$MODULE_PATH\.raspinel.yml`
@@ -87,8 +89,8 @@ options:
                         upload file to remote using sftp
 ```
 
-
 ## Usage as application
+
 To launch the application, nothing could be simpler : 
 ```sh
 py -m raspinel
@@ -98,12 +100,9 @@ py -m raspinel
 
 ![Image of Raspinel - Main Window](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/capture.png)
 
-
 ### The Manager
 
 ![Image of Raspinel - Manager](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/manager.png)
-
-
 
 ## Usage as module
 
@@ -127,7 +126,7 @@ if __name__ == "__main__":
     sys.exit(resp.exit)
 ```
 
-For more details or help use `py -c "help(__import__('raspinel'))"`
+For more details or help use `py -c "import raspinel;help(raspinel)"`
 
 ## License
 
