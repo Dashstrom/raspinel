@@ -42,7 +42,8 @@ def show_errors_raised(func: Callable[..., R]) -> Callable[..., R | None]:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            return show_error(e)
+            show_error(e)
+            return
     return wrapper
 
 
