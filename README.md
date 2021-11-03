@@ -5,7 +5,7 @@ it simplifies the deployment scripts and monitoring.
 
 ⚠️ Warning : no security guarantee, please do not use this package for access to sensitive data.
 
-⚠️ Developed only for window client to linux remote at the moment.
+⚠️ Currently support only window client to linux remote.
 
 ## Table of Contents
 
@@ -113,10 +113,9 @@ from raspinel import Client
 
 if __name__ == "__main__":
     # connect from env or files
-    clt = Client.resolve()
-    
-    # send command
-    resp = clt.cmd("echo {}", "hello world")
+    with Client.resolve() as clt:
+        # send command
+        resp = clt.cmd("echo {}", "hello world")
     
     # show outputs
     print(resp.out)

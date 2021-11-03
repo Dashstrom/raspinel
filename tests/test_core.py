@@ -371,5 +371,14 @@ class TestClient(TestCase):
             os.kill(pid, signal.SIGTERM)
 
 
+class TestEndToEnd(TestCase):
+
+    def test_readme_example(self):
+        with Client.resolve() as clt:
+            resp = clt.cmd("echo {}", "hello world")
+        self.assertEqual("hello world", resp.out)
+        self.assertEqual("", resp.err)
+
+
 if __name__ == "__main__":
     unittest.main()

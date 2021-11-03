@@ -426,19 +426,6 @@ class Connection:
         with auth_lock:
             self._unsafe_close()
 
-    def __enter__(self) -> "Connection":
-        """Support for contextmanager."""
-        return self
-
-    def __exit__(
-            self,
-            exc_type: Type[BaseException] | None,
-            exc_val: BaseException | None,
-            exc_tb: TracebackType | None
-    ) -> None:
-        """Close raspberry anyway."""
-        self.close()
-
 
 class Client(Connection):
     """Represent a Client for connection."""
@@ -717,3 +704,16 @@ class Client(Connection):
         """Open Winscp."""
         self.check_connection()
         return DetachedProcess([WINSCP, self.sftp_url])
+
+    def __enter__(self) -> "Connection":
+        """Support for contextmanager."""
+        return self
+
+    def __exit__(
+            self,
+            exc_type: Type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None
+    ) -> None:
+        """Close raspberry anyway."""
+        self.close()
