@@ -126,11 +126,11 @@ py -m raspinel
 
 ### The main window
 
-![Image of Raspinel - Main Window](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/capture.png)
+![Image of Raspinel - Main Window](https://raw.githubusercontent.com/Dashstrom/raspinel/main/docs/images/capture.png)
 
 ### The Manager
 
-![Image of Raspinel - Manager](https://raw.githubusercontent.com/Dashstrom/raspinel/main/images/manager.png)
+![Image of Raspinel - Manager](https://raw.githubusercontent.com/Dashstrom/raspinel/main/docs/images/manager.png)
 
 ## Usage as module
 
