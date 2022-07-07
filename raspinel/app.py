@@ -2,48 +2,50 @@
 Graphical client for raspberry pi.
 """
 import logging
+import os
 import tkinter as tk
-
 from abc import ABC
 from datetime import datetime
 from functools import partial, wraps
+from threading import Lock, Thread
 from time import sleep
-from threading import Thread, Lock
-from tkinter import messagebox, TclError, ttk
-from tkinter.constants import W, LEFT, TRUE, RIGHT, END, BOTH, NW, X
+from tkinter import TclError, messagebox, ttk
+from tkinter.constants import BOTH, END, LEFT, NW, RIGHT, TRUE, W, X
 from traceback import print_exc
-from typing import Any, Callable, Optional, Set, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
+
 from paramiko import AuthenticationException
+from typing_extensions import ParamSpec
 
 from .core import Client, Screen
 from .exception import ExitCodeError, SSHError
 from .util import rel_path
 
-
-ICON_PATH = rel_path("assets/raspinel.ico")
+ASSETS_PATH = rel_path("assets")
+ICON_PATH = os.path.join(ASSETS_PATH, "raspinel.ico")
 R = TypeVar("R")
+P = ParamSpec("P")
+_Runnable = Callable[[], Any]
+_EntryIndex = Union[str, int]
 
-loaded: dict[str, tk.PhotoImage] = {}
+loaded: Dict[str, tk.PhotoImage] = {}
 
 
 def img(name: str) -> tk.PhotoImage:
     """Load image by name and put in cache."""
     if name not in loaded:
-        loaded[name] = tk.PhotoImage(file=rel_path("assets/" + name))
+        loaded[name] = tk.PhotoImage(file=os.path.join(ASSETS_PATH, name))
     return loaded[name]
 
 
-# FIXME : ParamSpec not supported by mypy
-# see https://github.com/python/mypy/issues/8645
-def show_errors_raised(func: Callable[..., R]) -> Callable[..., R | None]:
+def show_errors_raised(func: Callable[P, None]) -> Callable[P, None]:
     """Show error messagebox if an error is raised."""
     @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> R | None:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> None:
         try:
-            return func(*args, **kwargs)
-        except Exception as e:
+            func(*args, **kwargs)
+        except Exception as e:  # pylint: disable=broad-except
             show_error(e)
-            return
     return wrapper
 
 
@@ -57,7 +59,7 @@ def show_error(error: Exception) -> None:
 class SquareButton(tk.Button):
     """Square Button with an image."""
     def __init__(self, master: tk.Misc, name: str,
-                 command: Callable[[], Any]) -> None:
+                 command: _Runnable) -> None:
         """Instantiate SquareButton."""
         super().__init__(
             master, command=command, image=img(name), width=20, height=20)
@@ -68,22 +70,26 @@ class Entry(tk.Entry):
     def __init__(
         self,
         master: tk.Misc,
-        default: str | None = None,
-        fg: str | None = None,
-        action: Callable[[], Any] | None = None,
+        default: Optional[str] = None,
+        fg: Optional[str] = None,
+        action: Optional[_Runnable] = None,
         **kwargs: Any
     ) -> None:
         """Instantiate Entry."""
-        super().__init__(master, fg="gray" if fg is None else fg, **kwargs)
+        super().__init__(
+            master, fg="gray" if fg is None else fg, **kwargs)  # type: ignore
         self.default = "" if default is None else default
         self.action = action
-        text: str = super().get()  # type: ignore
+        text: str = super().get()
         self._default_activated = not text
         if not text:
-            self.insert(0, self.default)  # type: ignore
-        self.bind("<FocusIn>", lambda e: self.handle_focus_in())
-        self.bind("<FocusOut>", lambda e: self.handle_focus_out())
-        self.bind('<Return>', lambda e: self._call_action())
+            self.insert(0, self.default)
+        self.bind(
+            "<FocusIn>", lambda _: self.handle_focus_in())  # type: ignore
+        self.bind(
+            "<FocusOut>", lambda _: self.handle_focus_out())  # type: ignore
+        self.bind(
+            "<Return>", lambda _: self._call_action())  # type: ignore
 
     def _call_action(self) -> None:
         """Call action if exists."""
@@ -98,18 +104,20 @@ class Entry(tk.Entry):
         """Return the text."""
         if self._default_activated:
             return ""
-        return super().get()  # type: ignore
+        return super().get()
 
-    def delete(self, first: Any, last: Any = None) -> None:
+    def delete(
+        self, first: _EntryIndex, last: Optional[_EntryIndex] = None
+    ) -> None:
         """Delete text from FIRST to LAST (not included)."""
-        super().delete(first, last=last)
+        super().delete(first, last)
         self.handle_focus_out()
 
     def handle_focus_in(self) -> None:
         """Handle focus in and remove default text if needed."""
         if self._default_activated and self.focused():
             super().delete(0, tk.END)
-            self.config(fg='black')
+            self.config(fg="black")
             self._default_activated = False
 
     def handle_focus_out(self) -> None:
@@ -117,8 +125,8 @@ class Entry(tk.Entry):
         text = self.get()
         if not text and not self.focused():
             super().delete(0, tk.END)
-            self.config(fg='grey')
-            super().insert(0, self.default)  # type: ignore
+            self.config(fg="grey")
+            super().insert(0, self.default)
             self._default_activated = True
 
 
@@ -141,11 +149,11 @@ class DataOutput(tk.Frame, ABC):
         self.label.pack(side=LEFT)
         self.value.pack(side=RIGHT)
 
-        self.__threads: dict[str, Thread] = {}
+        self.__threads: Dict[str, Thread] = {}
         self.__stop = False
-        self._recursive_call()
+        self._update_loop()
 
-    def _recursive_call(self) -> None:
+    def _update_loop(self) -> None:
         """Call the display update in a non-blocking way."""
         if self.__stop:
             return
@@ -153,13 +161,13 @@ class DataOutput(tk.Frame, ABC):
         name = f"{self.title}-Thread-{self.id_last_thread}"
         with self.class_lock:
             self.id_last_thread += 1
-        self.__threads[name] = thread = Thread(target=self._caller,
+        self.__threads[name] = thread = Thread(target=self._call_callback,
                                                name=name)
         thread.start()
         ms = int(self.refresh * 1000)
-        self.after(ms, self._recursive_call)
+        self.after(ms, self._update_loop)
 
-    def _caller(self) -> None:
+    def _call_callback(self) -> None:
         """Wrap function call."""
         try:
             result = str(self.func())
@@ -209,7 +217,7 @@ class Info(tk.LabelFrame):
         for out in self.outs():
             out.pack(anchor=W, padx=1)
 
-    def outs(self) -> list[DataOutput]:
+    def outs(self) -> List[DataOutput]:
         """Get all DataOutput."""
         return [self.temperature, self.memory, self.cpu,
                 self.uptime, self.storage]
@@ -222,7 +230,7 @@ class Interaction(tk.LabelFrame):
         super().__init__(master, text="Interaction", labelanchor=NW)
         self.client = client
         self._manager: Optional[ScreenManager] = None
-        buttons: dict[str, Callable[[], None]] = {
+        buttons: Dict[str, Callable[[], None]] = {
             "Putty": self.pressed_putty,
             "WinSCP": self.pressed_winscp,
             "Manager": self.pressed_manager,
@@ -252,7 +260,8 @@ class Interaction(tk.LabelFrame):
 
     def pressed_reboot(self) -> None:
         """Reboot remote in other thread."""
-        thread = Thread(target=show_errors_raised(self.client.reboot))
+        target = show_errors_raised(self.client.reboot)
+        thread = Thread(target=target)
         thread.start()
         self.after(2000, thread.join)
 
@@ -333,19 +342,19 @@ class ScreenManager(tk.Toplevel):
         col0, col1, col2, col3 = "#0", "#1", "#2", "#3"
         self.table["columns"] = (col1, col2, col3)
 
-        # Format columns
-        column = partial(self.table.column, anchor=W, stretch=False)
-        column(col0, width=60, minwidth=60)
-        column(col1, width=150, minwidth=150)
-        column(col2, width=120, minwidth=120)
-        column(col3, width=80, minwidth=80)
+        def _column(col: str, width: int, text: str) -> None:
+            self.table.column(col, anchor=W, stretch=False,
+                              width=width, minwidth=width)
+            self.table.heading(col, text=text, anchor=W)
 
-        # Create headings
-        heading = partial(self.table.heading, anchor=W)
-        heading(col0, text="Id")
-        heading(col1, text="Name")
-        heading(col2, text="Start")
-        heading(col3, text="State")
+        # Format columns
+        _column(col0, 60, "Id")
+        _column(col1, 150, "Name")
+        _column(col2, 120, "Start")
+        _column(col3, 80, "State")
+
+        def _heading(col: str, text: str) -> None:
+            self.table.heading(col, text=text, anchor=W)
 
         # Create bottom bar
         self.interaction_bar = tk.Frame(self)
@@ -380,24 +389,24 @@ class ScreenManager(tk.Toplevel):
         # self.__update_th = th
 
     @show_errors_raised
-    def handle_double_left_click(self, event: Any) -> None:
+    def handle_double_left_click(self, event):
+        # type: (tk.Event[ttk.Treeview]) -> None
         """Triggered by double click for attach screen."""
         screen = self.focus_at(event.y)
         if screen is not None:
             self.raspberry.putty(screen=screen)
 
-    def focus_at(self, y: int) -> Screen | None:
+    def focus_at(self, y: int) -> Optional[Screen]:
         """Get screen at y pos and select it."""
-        iid = self.table.identify_row(y)  # type: ignore
+        iid = self.table.identify_row(y)
         if not iid:
-            self.table.selection_set([])  # type: ignore
+            self.table.selection_set([])
             return None
-
-        self.table.selection_set(iid)  # type: ignore
+        self.table.selection_set(iid)
         return self.selection[0]
 
     @property
-    def selection(self) -> list[Screen]:
+    def selection(self) -> List[Screen]:
         """Get selected screens, if no one is selected return the first."""
         selection = self.table.selection()
         children = self.table.get_children()
@@ -405,12 +414,14 @@ class ScreenManager(tk.Toplevel):
         if not selection and children:
             selection = (children[0], )
         # Convert selection data to screens instances
-        items = [self.table.item(id_) for id_ in selection]
+        items = [self.table.item(id_) for id_ in selection]  # type: ignore
         screens = []
-        for item in items:
-            name, start, state = item["values"]
+        for item in items:  # type: ignore
+            pid = int(item["text"])  # type: ignore
+            values: List[str] = item["values"]  # type: ignore
+            name, start, state = values
             screen = Screen(
-                pid=int(item["text"]),
+                pid=pid,
                 name=name,
                 start=datetime.strptime(start, "%d/%m/%Y %H:%M"),
                 state=state
@@ -455,21 +466,17 @@ class ScreenManager(tk.Toplevel):
             try:
                 actual = set(self.raspberry.screens())
                 for screen in actual - last:
-                    self.table.insert(
-                        parent='',
-                        index=END,
-                        text=str(screen.pid),
-                        iid=i,
-                        tags=('row',),
-                        value=[screen.name,
-                               f"{screen.start:%d/%m/%Y %H:%M}",
-                               screen.state]
-                    )
+                    values = [screen.name,
+                              f"{screen.start:%d/%m/%Y %H:%M}",
+                              screen.state]
+                    self.table.insert(parent="", index=END,
+                                      text=str(screen.pid), iid=str(i),
+                                      tags=("row",), values=values)
                     i += 1
                 ids = {int(self.table.item(index, "text")): index
                        for index in self.table.get_children()}
                 deleted_ids = [ids[screen.pid] for screen in last - actual]
-                self.table.delete(*deleted_ids)  # type: ignore
+                self.table.delete(*deleted_ids)
                 last = actual
             except (TclError, RuntimeError):  # Window closed
                 logging.info("Window closed")
@@ -481,7 +488,7 @@ class ScreenManager(tk.Toplevel):
                 try:
                     last = set()
                     children = self.table.get_children()
-                    self.table.delete(*children)  # type: ignore
+                    self.table.delete(*children)
                 except (TclError, RuntimeError):
                     # Connection and window closed
                     return

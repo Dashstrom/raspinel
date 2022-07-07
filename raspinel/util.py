@@ -2,22 +2,23 @@
 Utility module.
 """
 import os
-import random
+import secrets
 import sys
+import tempfile
 import time
-
 from contextlib import contextmanager
-from typing import Iterator, Union
-
+from typing import Iterator, Optional
 
 COMMAND_NOT_FOUND = 127
 
 
 def rel_path(relative_path: str) -> str:
     """Get path as relative path, pyinstaller compatible."""
-    if hasattr(sys, '_MEIPASS'):
-        dir_path = getattr(sys, "_MEIPASS")
-    elif getattr(sys, 'frozen', False):
+    meipass: Optional[str] = getattr(sys, "_MEIPASS", None)
+    frozen: bool = getattr(sys, "frozen", False)
+    if meipass is not None:
+        dir_path = os.path.join(meipass, "mandelia")
+    elif frozen:
         dir_path = os.path.dirname(sys.executable)
     else:
         dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -26,11 +27,14 @@ def rel_path(relative_path: str) -> str:
 
 @contextmanager
 def temp_file(
-        content: Union[str, bytes], timeout: float = 3000.0
+        content: Optional[bytes] = None, timeout: float = 3000.0
 ) -> Iterator[str]:
-    """ Create temporary file, return the path and remove it after timeout."""
+    """Create temporary file, return the path and remove it after timeout."""
+    if content is None:
+        content = b""
     while True:
-        path = rel_path(f"tmp/file_{random.randbytes(8).hex()}")
+        path = os.path.join(
+            tempfile.gettempdir(), f"file_{secrets.token_hex(16)}")
         if not os.path.exists(path):
             break
     if isinstance(content, str):

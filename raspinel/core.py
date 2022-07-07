@@ -2,35 +2,51 @@
 Core to connect to a raspberry.
 """
 import logging
-import sys
 import os
 import re
 import socket
 import subprocess
+import sys
 import warnings
-
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from shlex import quote
 from os import PathLike
-from typing import Any, Iterator, Optional, Sequence, Union, Type
-from types import TracebackType
+from shlex import quote
 from threading import Lock
-from pathlib import Path
+from types import TracebackType
+from typing import (TYPE_CHECKING, Dict, Iterator, List, Optional, Sequence,
+                    Tuple, Type, Union)
 
 import yaml
-
-from paramiko import AuthenticationException, SSHClient, SSHException
+from paramiko import (AuthenticationException, AutoAddPolicy, SSHClient,
+                      SSHException)
 from paramiko.channel import ChannelFile
 from paramiko.config import SSH_PORT
 from paramiko.sftp_client import SFTPClient
+from typing_extensions import Literal, NotRequired, Protocol, TypedDict
 
-from .exception import ExitCodeError, FormatError, SSHError, NoConnectionError
-from .util import temp_file, rel_path
+from .exception import ExitCodeError, FormatError, NoConnectionError, SSHError
+from .util import rel_path, temp_file
 
 
-StrOrBytesPath = Union[str, bytes, PathLike[str], PathLike[bytes]]
+class Stringable(Protocol):
+    """Represent an object who can be printed."""
+    def __str__(self) -> str:
+        ...
+
+
+if TYPE_CHECKING:
+    PopenBytes = subprocess.Popen[bytes]  # type: ignore
+    PathLikeBytes = PathLike[bytes]
+    PathLikeStr = PathLike[str]
+else:
+    PopenBytes = subprocess.Popen
+    PathLikeBytes = PathLike
+    PathLikeStr = PathLike
+
+
+StrOrBytesPath = Union[str, bytes, PathLikeBytes, PathLikeStr]
 _CMD = Union[StrOrBytesPath, Sequence[StrOrBytesPath]]
 
 GB = 10 ** 6
@@ -45,22 +61,40 @@ SCREEN_RE = re.compile(
     r"\t(?P<pid>\d{1,8})\.(?P<name>.+)\t"
     r"\((?P<start>\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})\)\t\((?P<state>.+)\)"
 )
+CONFIG_MAPPER = {
+    "hostname": "RASPINEL_HOSTNAME",
+    "port": "RASPINEL_PORT",
+    "password": "RASPINEL_PASSWORD",
+    "username": "RASPINEL_USERNAME",
+    "timeout": "RASPINEL_TIMEOUT"
+}
 
 # Paths for child programs
-# TODO Auto Resolve
 WINSCP = "C:\\Program Files (x86)\\WinSCP\\WinSCP.exe"
-PUTTY = "putty"
+PUTTY = "C:\\Program Files\\PuTTY\\putty.exe"
 
 # Flag for DetachedProcess
-# TODO use deamon = True and os.fork() on linux
-DETACHED = 0
+DETACHED: int = 0
 if sys.platform == "win32":
-    DETACHED |= subprocess.DETACHED_PROCESS
+    if sys.version_info >= (3, 7):
+        DETACHED |= subprocess.DETACHED_PROCESS
+        DETACHED |= subprocess.CREATE_BREAKAWAY_FROM_JOB
     DETACHED |= subprocess.CREATE_NEW_PROCESS_GROUP
-    DETACHED |= subprocess.CREATE_BREAKAWAY_FROM_JOB
 
 
-class DetachedProcess(subprocess.Popen[bytes]):
+class Config(TypedDict):
+    """Represent a confuguration."""
+    hostname: str
+    port: int
+    password: NotRequired[str]
+    username: NotRequired[str]
+    timeout: NotRequired[int]
+
+
+ConfigKey = Literal["hostname", "port", "password", "username", "timeout"]
+
+
+class DetachedProcess(PopenBytes):
     """Same as Popen but can be left open at the end of the program."""
     def __init__(self, args: _CMD) -> None:
         """Instantiate DetachedProcess."""
@@ -75,7 +109,8 @@ class DetachedProcess(subprocess.Popen[bytes]):
             super().__del__()  # type: ignore
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"<id=0x{id(self):016x} *args=SECRET>"
+        name = self.__class__.__name__
+        return name + f"<id=0x{id(self):016x} *args=SECRET>"
 
     __str__ = __repr__
 
@@ -88,7 +123,7 @@ class Response:
     err: str
     exit: int = 0
 
-    def check(self, *exits: int) -> 'Response':
+    def check(self, *exits: int) -> "Response":
         """Check if the exit code is correct, otherwise raise ExitCodeError."""
         if self.exit not in exits:
             raise ExitCodeError(self.exit)
@@ -121,7 +156,7 @@ class EntryPS:
         return self.pid
 
     @staticmethod
-    def from_line(line: str) -> 'EntryPS':
+    def from_line(line: str) -> "EntryPS":
         """Convert a line from ps command into EntryPS instance."""
         args = line.strip().split(maxsplit=12)
         if len(args) != 13:
@@ -158,28 +193,28 @@ class Connection:
     """Represent a connection to the remote with basic interaction."""
     def __init__(
         self,
-        hostname: str | None = None,
-        port: int | None = None,
-        username: str | None = None,
-        password: str | None = None,
-        timeout: float | None = None
+        hostname: Optional[str] = None,
+        port: Optional[int] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        timeout: Optional[float] = None
     ) -> None:
         """Instantiate Connection, no hostname for no implicit connection."""
         self.__ssh: Optional[SSHClient] = None
-        self.__password: Optional[str] = password
-        self.__username: Optional[str] = username
-        self.__hostname: Optional[str] = hostname
+        self.__password = password
+        self.__username = username
+        self.__hostname = hostname
         self.__port: int = port if port is not None else SSH_PORT
         self.__version = 0
-        self.timeout = 1.5 if timeout is None else timeout
+        self.timeout = 3 if timeout is None else timeout
         logging.info("Create Connection")
         if hostname is not None:
             self.reconnect()
 
     def __repr__(self) -> str:
         """Represent the Connection."""
-        return (f"{self.__class__.__name__}"
-                f"(host='{self.hostname}', port={self.port})")
+        name = self.__class__.__name__
+        return f"{name}(host={self.hostname!r}, port={self.port})"
 
     @property
     def ssh(self) -> SSHClient:
@@ -209,38 +244,39 @@ class Connection:
             sftp.get(remote_path, local_path)
 
     @staticmethod
-    def config_env() -> dict[str, Any]:
+    def config_env() -> Config:
         """Load config from default path."""
-        config: dict[str, Any] = {
-            "hostname": "RASPINEL_HOSTNAME",
-            "port": "RASPINEL_PORT",
-            "password": "RASPINEL_PASSWORD",
-            "username": "RASPINEL_USERNAME",
-            "timeout": "RASPINEL_TIMEOUT"
-        }
-        config = {k: v for k, e in config.items()
-                  if (v := os.getenv(e)) is not None}
+        config: Config = {}  # type: ignore
+        for k, e in CONFIG_MAPPER.items():
+            v = os.getenv(e)
+            if v is not None:
+                config[k] = v  # type: ignore
         if not config:
             raise OSError("No env config")
         if "hostname" not in config:
-            raise KeyError("'RASPINEL_HOSTNAME' missing from env")
-        if "port" in config:
-            try:
-                config["port"] = int(config["port"])
-            except ValueError:
-                raise ValueError("'RASPINEL_PORT' must be a number") from None
+            raise KeyError("\"RASPINEL_HOSTNAME\" missing from env")
+
+        def _int(key: ConfigKey, export: str) -> None:
+            if key in config:
+                try:
+                    config[key] = int(config[key])
+                except ValueError:
+                    raise ValueError(f"{export!r} must be a number") from None
+
+        _int("port", "RASPINEL_PORT")
+        _int("timeout", "RASPINEL_TIMEOUT")
         return config
 
     @staticmethod
-    def config_yml(path: str) -> dict[str, Any]:
+    def config_yml(path: str) -> Config:
         """Load config from default path."""
         with open(path, "r", encoding="utf8") as file:
-            config = yaml.safe_load(file)
+            config: Config = yaml.safe_load(file)
 
         if not isinstance(config, dict):
             raise TypeError("Config must be key-value")
 
-        def check(key: Any, klass: type, required: bool = False) -> None:
+        def check(key: ConfigKey, klass: type, required: bool = False) -> None:
             if key in config:
                 if not isinstance(config.get(key), klass):
                     raise TypeError(f"{key!r} must be a {klass.__name__}")
@@ -257,12 +293,13 @@ class Connection:
         extras = keys - {"hostname", "username", "port", "password", "timeout"}
         if extras:
             extra = next(iter(extras))
-            raise KeyError(f"'{extra}' should not be present")
+            raise KeyError(f"{extra!r} should not be present")
 
         return config
 
     @staticmethod
-    def default_config() -> dict[str, Any]:
+    def default_config() -> Config:
+        """Get config from env or yml."""
         try:
             return Connection.config_env()
         except OSError:  # no config config
@@ -270,7 +307,7 @@ class Connection:
         name = ".raspinel.yml"
 
         paths = [os.path.abspath(os.path.join("./", name)),
-                 os.path.join(Path.home(), name),
+                 os.path.join(os.path.expanduser("~"), name),
                  rel_path(name)]
 
         for path in paths:
@@ -285,7 +322,7 @@ class Connection:
         raise FileNotFoundError(msg)
 
     @staticmethod
-    def resolve() -> 'Connection':
+    def resolve() -> "Connection":
         """Load default configuration, from raspinel.conf."""
         return Connection(**Connection.default_config())
 
@@ -293,14 +330,16 @@ class Connection:
         self,
         hostname: str,
         port: int = SSH_PORT,
-        username: str | None = None,
-        password: str | None = None
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        timeout: Optional[int] = None
     ) -> None:
         """Connect with ssh."""
         self.__hostname = hostname
         self.__port = port
         self.__username = username
         self.__password = password
+        self.timeout = 3 if timeout is None else timeout
         self.reconnect()
 
     def reconnect(self) -> None:
@@ -312,6 +351,7 @@ class Connection:
             # self.__authenticated = None
             self.__ssh = SSHClient()
             self.__ssh.load_system_host_keys()
+            self.__ssh.set_missing_host_key_policy(AutoAddPolicy())
             self.__version += 1
             try:
                 self.__ssh.connect(
@@ -324,7 +364,7 @@ class Connection:
             except socket.timeout:  # can't resolve hostname or port
                 self._unsafe_close()
                 raise TimeoutError(
-                    "Sockat has timeout, maybe wrong port or hostname"
+                    "Socket has timeout, maybe wrong port or hostname"
                 ) from None
             except Exception:
                 self._unsafe_close()
@@ -371,18 +411,17 @@ class Connection:
         if not self.connected():
             raise SSHError("Can't use not available connection")
 
-    def cmd(self, fmt: str, *args: Any, **kw: Any) -> Response:
+    def cmd(self, fmt: str, *args: Stringable, **kw: Stringable) -> Response:
         """Run command with auto escape of args."""
         # format command by escaping
         def read(channel: ChannelFile) -> str:
-            return channel.read().decode("utf8").strip('\n')
+            return channel.read().decode("utf8").strip("\n")
 
         cmd = fmt.format(*[quote(str(arg)) for arg in args],
                          **{k: quote(str(v)) for k, v in kw.items()})
+        # let NoConnectionError propagnate
         try:
             channels = self.ssh.exec_command(cmd, timeout=self.timeout)
-        except NoConnectionError:
-            raise
         except (SSHException, EOFError, ConnectionResetError) as e:
             if isinstance(e, (ConnectionResetError, EOFError)):
                 self.close()
@@ -397,7 +436,7 @@ class Connection:
             logging.error("Error %s for %s", repr(e), cmd)
             raise SSHError(f"Error occurred during command {cmd}") from e
 
-        stdin, stdout, stderr = channels
+        _, stdout, stderr = channels
         code = stdout.channel.recv_exit_status()
         if code == -1:
             raise ExitCodeError(-1)
@@ -429,15 +468,15 @@ class Connection:
 
 class Client(Connection):
     """Represent a Client for connection."""
-    __cache_uptime: datetime | None
+    __cache_uptime: Optional[datetime]
 
     def __init__(
         self,
-        hostname: str | None = None,
-        port: int | None = None,
-        username: str | None = None,
-        password: str | None = None,
-        timeout: float | None = None
+        hostname: Optional[str] = None,
+        port: Optional[int] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        timeout: Optional[float] = None
     ) -> None:
         """Instantiate Client."""
         self.__cache_uptime = None
@@ -449,7 +488,7 @@ class Client(Connection):
         super().reconnect()
 
     @staticmethod
-    def resolve() -> 'Client':
+    def resolve() -> "Client":
         """Load default configuration, from raspinel.conf."""
         return Client(**Client.default_config())
 
@@ -458,9 +497,9 @@ class Client(Connection):
         """Get temperature."""
         resp = self.cmd("vcgencmd measure_temp")
         resp.check(0)
-        if match := TEMPERATURE_RE.fullmatch(resp.out):
-            return float(match[1])
-
+        match = TEMPERATURE_RE.fullmatch(resp.out)
+        if match is not None:
+            return float(match[1])  # type: ignore
         raise FormatError("temperature", resp)
 
     def fmt_temperature(self) -> str:
@@ -468,8 +507,8 @@ class Client(Connection):
         return f"{self.temperature:.1f}°C"
 
     @property
-    def cpu(self) -> list[float]:
-        """ Get CPU's usage between 0 and 1, if no cpu return empty list."""
+    def cpu(self) -> List[float]:
+        """Get CPU's usage between 0 and 1, if no cpu return empty list."""
         resp = self.cmd("mpstat -P ALL 1 1")
         resp.check(0)
         lines = COLOR_RE.sub("", resp.out).split("\n")[11:]
@@ -483,21 +522,19 @@ class Client(Connection):
 
     def fmt_cpu(self) -> str:
         """Get formatted CUP's usage."""
-        # FIXME : missing value in __main__
         cpus = self.cpu
         if cpus:
             cpu = "  ".join(f"{perc * 100:.2f}%" for perc in cpus)
             cpu += f"  ({sum(cpus) * 100 / len(cpus):.2f}%)"
             return cpu
-        else:
-            return "0%"
+        return "0%"
 
     @property
-    def memory(self) -> tuple[int, int]:
+    def memory(self) -> Tuple[int, int]:
         """Get usage of memory with 2 int: (used, total)."""
         resp = self.cmd("free | grep 'Mem:'")
         resp.check(0)
-        name, total, used, free, *others = resp.out.split()
+        _, total, _, free, *_ = resp.out.split()
         return int(total) - int(free), int(total)
 
     def fmt_memory(self) -> str:
@@ -513,7 +550,8 @@ class Client(Connection):
         if self.__cache_uptime is None:
             resp = self.cmd("uptime -s")
             resp.check(0)
-            self.__cache_uptime = datetime.fromisoformat(resp.out)
+            self.__cache_uptime = datetime.strptime(
+                resp.out, "%Y-%m-%d %H:%M:%S")
         return self.__cache_uptime
 
     def fmt_uptime(self) -> str:
@@ -527,7 +565,7 @@ class Client(Connection):
         return f"{days}d {hours:02}:{minutes:02}:{seconds:02}"
 
     @property
-    def storage(self) -> tuple[int, int]:
+    def storage(self) -> Tuple[int, int]:
         """Get disk space with 2 int: (used, total)."""
         resp = self.cmd("df")
         resp.check(0)
@@ -535,7 +573,7 @@ class Client(Connection):
         used = 0
         total = 0
         for line in lines[1:]:
-            name, size, use, free, perc, mount = line.split()
+            name, size, use, *_ = line.split()
             if name.startswith("/"):
                 used += int(use)
                 total += int(size)
@@ -547,7 +585,8 @@ class Client(Connection):
         if not (used or total):
             return "0.00GB / 0.00GB (0.00%)"
         total = max(total, used)
-        return f"{used/GB:.2f}GB / {total/GB:.2f}GB ({used * 100/total:.2f}%)"
+        return (f"{used / GB:.2f}GB / {total / GB:.2f}GB "
+                f"({used * 100 / total:.2f}%)")
 
     @property
     def info(self) -> str:
@@ -562,7 +601,7 @@ class Client(Connection):
             f"storage     : {self.fmt_storage()}"
         )
 
-    def ps(self) -> list[EntryPS]:
+    def ps(self) -> List[EntryPS]:
         """Get all running process."""
         resp = self.cmd("ps -ely")
         resp.check(0)
@@ -612,19 +651,23 @@ class Client(Connection):
         else:
             resp.check(0)
 
-    def screens(self) -> list[Screen]:
+    def screens(self) -> List[Screen]:
         """Get all screens"""
         resp = self.cmd("screen -ls")
         resp.check(0, 1)
         screens = []
         for line in resp.out.split("\n")[1:-1]:
-            if match := SCREEN_RE.fullmatch(line):
-                kwargs: dict[str, Any] = match.groupdict()
-                kwargs["pid"] = int(kwargs["pid"])
+            match = SCREEN_RE.fullmatch(line)
+            if match is not None:
+                kwargs: Dict[str, str] = match.groupdict()
                 start = datetime.strptime(kwargs["start"], "%d/%m/%Y %H:%M:%S")
-                kwargs["start"] = start.replace(second=0)
-                screen = Screen(**kwargs)
-                screens.append(screen)
+                start = start.replace(second=0)
+                screens.append(Screen(
+                    pid=int(kwargs["pid"]),
+                    name=kwargs["name"],
+                    start=start,
+                    state=kwargs["state"]
+                ))
         return screens
 
     def get_screen(self, identifier: ScreenIdentifier) -> Screen:
@@ -664,8 +707,8 @@ class Client(Connection):
 
     def putty(
         self,
-        command: str | None = None,
-        screen: ScreenIdentifier | None = None
+        command: Optional[str] = None,
+        screen: Optional[ScreenIdentifier] = None
     ) -> DetachedProcess:
         """Open putty with command or screen."""
         self.check_connection()
@@ -679,7 +722,7 @@ class Client(Connection):
         if command:
             script += command
         if script:
-            with temp_file(script) as path:
+            with temp_file(script.encode("utf8")) as path:
                 args += ["-m", path, "-t"]
                 return DetachedProcess(args)
         else:
@@ -711,9 +754,9 @@ class Client(Connection):
 
     def __exit__(
             self,
-            exc_type: Type[BaseException] | None,
-            exc_val: BaseException | None,
-            exc_tb: TracebackType | None
+            exc_type: Optional[Type[BaseException]],
+            exc_val: Optional[BaseException],
+            exc_tb: Optional[TracebackType]
     ) -> None:
         """Close raspberry anyway."""
         self.close()

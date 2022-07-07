@@ -4,12 +4,20 @@ Run main application.
 import argparse
 import logging
 import sys
+from typing import NamedTuple, Tuple
 
 from .app import App
-from .exception import ExitCodeError
 from .core import Client
+from .exception import ExitCodeError
 
 FORMAT = "[%(levelname)s][%(filename)s:%(funcName)s] %(message)s"
+
+
+class Arguments(NamedTuple):
+    info: bool
+    download: Tuple[str, str]
+    upload: Tuple[str, str]
+    commands: Tuple[str, ...]
 
 
 def main() -> int:
@@ -29,11 +37,11 @@ def main() -> int:
     parser.add_argument("-u", "--upload", type=str, nargs=2,
                         metavar=("src", "dest"),
                         help="upload file to remote using sftp")
-    parser.add_argument("commands", nargs='*', type=str,
+    parser.add_argument("commands", nargs="*", type=str,
                         help="commands to execute on remote")
-    args = parser.parse_args()
+    args = Arguments(**vars(parser.parse_args()))  # type: ignore
     is_default = (None, [], False).__contains__
-    run_as_app = all(map(is_default, vars(args).values()))
+    run_as_app = all(map(is_default, args))
     if run_as_app:
         logging.basicConfig(level=logging.INFO, format=FORMAT)
         app = App()

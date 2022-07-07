@@ -12,7 +12,7 @@ class FormatError(SSHError):
     """Raised when response have wrong format."""
     def __init__(self, name: str, got: Any) -> None:
         super().__init__(
-            f"Invalid format for {name} got {got}")
+            f"Invalid format for {name} got {got}")  # type: ignore
 
 
 class ExitCodeError(SSHError):

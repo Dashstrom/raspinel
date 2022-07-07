@@ -1,30 +1,30 @@
 import os
 import random
+import secrets
 import signal
 import unittest
 import warnings
-import datetime as dt
-
-from time import sleep
-from threading import Thread
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from functools import partial
-from typing import Iterator
-from unittest import TestCase
-from unittest.mock import patch, PropertyMock
-from paramiko import AuthenticationException
 from string import ascii_letters, digits
+from threading import Thread
+from time import sleep
+from typing import Iterator, Union
+from unittest import TestCase
+from unittest.mock import PropertyMock, patch
 
-from raspinel import Connection, SSHError, Client, Screen
-from raspinel.util import temp_file, rel_path
+from paramiko import AuthenticationException
 
+from raspinel import Client, Connection, Screen, SSHError
+from raspinel.util import temp_file
 
 CMD_CREATE_SCREEN = "python3 -c '__import__(\"time\").sleep({})'"
-ASYNC_LOOP = 30
+ASYNC_LOOP = 2
 ALPHABET = digits + ascii_letters
 INVALID_URL = "invalid-" + "".join(random.choice(ALPHABET) for i in range(55))
 
-ppatch = partial(patch, new_callable=PropertyMock)
+ppatch = partial(patch, new_callable=PropertyMock)  # type: ignore
 
 
 @contextmanager
@@ -34,7 +34,10 @@ def assert_waring() -> Iterator[None]:
         yield
         if warns:
             msg = "Warning occur : \n"
-            msg += "\n".join(f"{w.message}\n{w.source}" for w in warns)
+            msg += "\n".join(
+                f"{w.message}\n{w.source}"  # type: ignore
+                for w in warns
+            )
             raise AssertionError(msg)
 
 
@@ -46,24 +49,21 @@ class TestConnection(TestCase):
 
     def test_upload_download(self) -> None:
         conn = Connection.resolve()
-        random_content = random.randbytes(random.randint(10 ** 5, 10 ** 6))
+        random_content = secrets.token_bytes(random.randint(10 ** 5, 10 ** 6))
         name = "test_raspinel.bin"
-        test_path = rel_path("../tests/" + name)
         with temp_file(random_content) as local_path:
             conn.upload(local_path, name)
 
-        try:
+        with temp_file() as test_path:
             conn.download(name, test_path)
             with open(test_path, "rb") as file:
                 content = file.read()
-            self.assertEqual(random_content, content)
-        finally:
-            os.remove(test_path)
+        self.assertEqual(random_content, content)
 
     def test_connect_wrong_hostname(self) -> None:
         conn = Connection.resolve()
         self.assertTrue(conn.connected(), "Login with valid hostname")
-        # FIXME : raise ResourceWarning at closing if the host is unresolvable
+        # Raise ResourceWarning at closing if the host is unresolvable
         # see: https://github.com/paramiko/paramiko/issues/1126
         with self.assertRaises(TimeoutError):
             config = conn.default_config()
@@ -90,18 +90,19 @@ class TestConnection(TestCase):
         conn.close()
 
     def test_async_reconnect(self) -> None:
-        for i in range(ASYNC_LOOP):
+        for _ in range(ASYNC_LOOP):
             errors_collector = []
             testing = True
             conn = Connection.resolve()
             self.assertTrue(conn.connected(), "Not Connected")
 
+            # pylint: disable=cell-var-from-loop
             def simple_echo() -> None:
-                nonlocal conn, testing
+                nonlocal conn, testing, errors_collector
                 while testing:
                     try:
                         conn.cmd("echo hello")
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-except
                         errors_collector.append(e)
 
             th = Thread(target=simple_echo)
@@ -116,7 +117,8 @@ class TestConnection(TestCase):
                 th.join()
                 for err in errors_collector:
                     self.assertIsInstance(err, SSHError)
-                self.assertNotEqual(errors_collector, [])
+
+                self.assertTrue(errors_collector)
             finally:
                 conn.close()
                 del conn
@@ -183,14 +185,15 @@ class TestClient(TestCase):
 
     def temp_screen(self, timeout: float = 5.0) -> Screen:
         name = f"temp_unittest_{self._cpt}"
-        print(f"Create Screen {name!r}")
         self.__class__._cpt += 1
         self.client.create_screen(CMD_CREATE_SCREEN.format(timeout), name)
         screen = self.client.get_screen(name)
         return screen
 
-    def assertBetween(self, value: int | float,
-                      min_: int | float, max_: int | float) -> None:
+    def assertBetween(
+        self, value: Union[int, float], min_: Union[int, float],
+        max_: Union[int, float]
+    ) -> None:
         self.assertGreaterEqual(value, min_)
         self.assertLessEqual(value, max_)
 
@@ -212,7 +215,7 @@ class TestClient(TestCase):
 
     def test_cpu(self) -> None:
         cpus = self.client.cpu
-        self.assertNotEqual(cpus, [])
+        self.assertTrue(cpus)
         for cpu in cpus:
             self.assertBetween(cpu, 0, 1)
 
@@ -242,21 +245,22 @@ class TestClient(TestCase):
 
     def test_uptime(self) -> None:
         up = self.client.uptime
-        self.assertGreaterEqual(up, dt.datetime(2010, 1, 1))
-        self.assertLessEqual(up, dt.datetime.now() + dt.timedelta(days=1))
+        self.assertGreaterEqual(up, datetime(2010, 1, 1))
+        self.assertLessEqual(up, datetime.now() + timedelta(days=1))
 
     def test_fmt_uptime(self) -> None:
         tests = [
-            (dt.datetime(2021, 1, 15), "0d 00:00:00"),
-            (dt.datetime(2021, 1, 13), "2d 00:00:00"),
-            (dt.datetime(2021, 1, 14, 19), "0d 05:00:00"),
-            (dt.datetime(2021, 1, 14, 23, 55), "0d 00:05:00"),
-            (dt.datetime(2021, 1, 14, 23, 59, 55), "0d 00:00:05"),
-            (dt.datetime(2021, 1, 16), "0d 00:00:00"),
-            (dt.datetime(2015, 1, 15), "2192d 00:00:00"),
+            (datetime(2021, 1, 15), "0d 00:00:00"),
+            (datetime(2021, 1, 13), "2d 00:00:00"),
+            (datetime(2021, 1, 14, 19), "0d 05:00:00"),
+            (datetime(2021, 1, 14, 23, 55), "0d 00:05:00"),
+            (datetime(2021, 1, 14, 23, 59, 55), "0d 00:00:05"),
+            (datetime(2021, 1, 16), "0d 00:00:00"),
+            (datetime(2015, 1, 15), "2192d 00:00:00"),
         ]
         with patch("raspinel.core.datetime") as mock_datetime:
-            mock_datetime.now.return_value = dt.datetime(2021, 1, 15)
+            dt = datetime(2021, 1, 15)
+            mock_datetime.now.return_value = dt  # type: ignore
             for val, attempt in tests:
                 with ppatch("raspinel.Client.uptime", return_value=val):
                     self.assertEqual(self.client.fmt_uptime(), attempt)
@@ -373,7 +377,7 @@ class TestClient(TestCase):
 
 class TestEndToEnd(TestCase):
 
-    def test_readme_example(self):
+    def test_readme_example(self) -> None:
         with Client.resolve() as clt:
             resp = clt.cmd("echo {}", "hello world")
         self.assertEqual("hello world", resp.out)
