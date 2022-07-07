@@ -1,4 +1,6 @@
-# Raspinel
+# ![Logo](https://raw.githubusercontent.com/Dashstrom/raspinel/main/docs/images/logo.png) Raspinel
+
+[![Windows](https://svgshare.com/i/ZhY.svg)](https://svgshare.com/i/ZhY.svg)
 
 Connection package to a raspberry or any other machine using ssh,
 it simplifies the deployment scripts and monitoring.
@@ -11,17 +13,18 @@ it simplifies the deployment scripts and monitoring.
 
 1. [Prerequisites](#prerequisites)
 2. [Install](#install)
-3. [Usage in command line](#usage-in-command-line)
-4. [Usage as application](#usage-as-application)
-4. [Usage as module](#usage-as-module)
-4. [License](#license)
+3. [Install for developpement](#install-for-developpement)
+4. [Usage in command line](#usage-in-command-line)
+5. [Usage as application](#usage-as-application)
+6. [Usage as module](#usage-as-module)
+7. [License](#license)
 
 ## Prerequisites
 
 To use this program you need python 3.10, no support will be provided for previous versions.
 
-
 You also need to install Putty and WinSCP
+
 - [Download Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html)
 - [Download WinSCP](https://winscp.net/eng/download.php)
 
@@ -31,47 +34,71 @@ This package is not available on pypi at the moment.
 To install it, you need to download it from git as below.
 
 ```sh
-git clone https://github.com/Dashstrom/raspinel.git raspinel
-cd raspinel
-pip install .
+pip install git+https://github.com/Dashstrom/raspinel
+py -m raspinel
 ```
+
+## Install for developpement
+
+You need 6 versions of python for run test on every versions :
+
+- [Python 3.11.0b3](https://www.python.org/downloads/release/python-3110b3/)
+- [Python 3.10.5](https://www.python.org/downloads/release/python-3105/)
+- [Python 3.9.13](https://www.python.org/downloads/release/python-3913/)
+- [Python 3.8.10](https://www.python.org/downloads/release/python-3810/)
+- [Python 3.7.9](https://www.python.org/downloads/release/python-379/)
+- [Python 3.6.8](https://www.python.org/downloads/release/python-368/)
+
+```sh
+git clone https://github.com/Dashstrom/raspinel.git
+cd raspinel
+pip install -r requirements_dev.txt
+```
+
+For run test you can use `tox`
 
 ## Configuration
 
 After downloading it you need to create a configuration file named `.raspinel.yml` in one of the following places :
+
 - `$HOME\.raspinel.yml`
 - `$MODULE_PATH\.raspinel.yml`
 - `$PWD\.raspinel.yml`
 
 It must contain the following structure where only the host is mandatory.
+
 ```yml
-hostname: 'REMOTE_HOSTNAME'
-port: REMOTE_PORT
-username: 'REMOTE_USERNAME'
-password: 'REMOTE_PASSWORD'
-timemout: CONNECTION_TIMEOUT_MS
+hostname: '192.168.0.X'
+port: 22
+username: 'pi'
+password: 'YOUR_PASSWORD'
+timemout: 2
 ```
 
 You can also just use environment variables as :
+
 ```sh
-export RASPINEL_HOSTNAME=${REMOTE_HOSTNAME}
-export RASPINEL_PORT=${REMOTE_PORT}
-export RASPINEL_PASSWORD=${REMOTE_USERNAME}
-export RASPINEL_USERNAME=${REMOTE_PASSWORD}
-export RASPINEL_TIMEOUT=${CONNECTION_TIMEOUT_MS}
+export RASPINEL_HOSTNAME=192.168.0.X
+export RASPINEL_PORT=22
+export RASPINEL_PASSWORD=YOUR_PASSWORD
+export RASPINEL_USERNAME=pi
+export RASPINEL_TIMEOUT=2
 ```
 
 You must of course replace the values given in the example by your own identifiers.
 
 If all is well configure the following command should reply you `hello world`.
-```
+
+```sh
 py -m raspinel "echo 'hello world'"
 ```
+
 ## Usage in command line
 
 The strength of this package is that it can be used as a command line tool,
 bellow are the supported command line functionality for the moment.
-```
+
+```txt
 usage: py -m raspinel [-h] [-i] [-d src dest] [-u src dest] [commands ...]
 
 Allows communication using ssh to get information, upload or download files or run commands.
@@ -91,7 +118,8 @@ options:
 
 ## Usage as application
 
-To launch the application, nothing could be simpler : 
+To launch the application, nothing could be simpler :
+
 ```sh
 py -m raspinel
 ```
@@ -107,7 +135,8 @@ py -m raspinel
 ## Usage as module
 
 Here is a simple code that displays a hello world.
-```python
+
+```py
 import sys
 from raspinel import Client
 
