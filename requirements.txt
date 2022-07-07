@@ -1,4 +1,7 @@
+wheel
 future
 PyYAML
 paramiko
 argparse
+dataclasses
+typing-extensions

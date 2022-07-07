@@ -1,0 +1,12 @@
+-r requirements.txt
+pytest
+tox
+flake8
+pylint
+twine
+mypy
+types-Pillow
+types-PyYAML
+types-setuptools
+types-paramiko
+types-dataclasses
