@@ -1,1 +1,3 @@
-include LICENSE
+include tests/*.py raspinel/*.py .gitignore pyproject.toml README.md LICENSE
+include raspinel/py.typed requirements.txt requirements_dev.txt
+graft docs/*
